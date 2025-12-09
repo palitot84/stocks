@@ -228,33 +228,21 @@ PERIOD_OPTIONS = {
     "5 Anos": "5y"
 }
 
-def get_usd_to_brl():
-    """Obtém cotação USD/BRL"""
-    try:
-        usdbrl = yf.Ticker('USDBRL=X')
-        hist = usdbrl.history(period='1d')
-        if not hist.empty:
-            return hist['Close'].iloc[-1]
-        return 5.0  # Fallback
-    except:
-        return 5.0  # Fallback
-
 def get_current_price(ticker_symbol):
     """Obtém preço atual com delay de 10 minutos"""
     try:
         ticker = yf.Ticker(ticker_symbol)
         is_brazilian = '.SA' in ticker_symbol.upper()
-        usd_to_brl = get_usd_to_brl() if is_brazilian else 1.0
         
         # Tentar fast_info primeiro (mais rápido)
         try:
             fast_info = ticker.fast_info
             return {
-                'price': fast_info.last_price * usd_to_brl,
-                'previous_close': fast_info.previous_close * usd_to_brl,
-                'open': fast_info.open * usd_to_brl,
-                'day_high': fast_info.day_high * usd_to_brl,
-                'day_low': fast_info.day_low * usd_to_brl,
+                'price': fast_info.last_price,
+                'previous_close': fast_info.previous_close,
+                'open': fast_info.open,
+                'day_high': fast_info.day_high,
+                'day_low': fast_info.day_low,
                 'volume': fast_info.last_volume,
                 'timestamp': datetime.now() - timedelta(minutes=10),
                 'currency': 'BRL' if is_brazilian else 'USD'
@@ -268,11 +256,11 @@ def get_current_price(ticker_symbol):
             last_row = hist.iloc[-1]
             first_row = hist.iloc[0]
             return {
-                'price': last_row['Close'] * usd_to_brl,
-                'previous_close': first_row['Open'] * usd_to_brl,
-                'open': first_row['Open'] * usd_to_brl,
-                'day_high': hist['High'].max() * usd_to_brl,
-                'day_low': hist['Low'].min() * usd_to_brl,
+                'price': last_row['Close'],
+                'previous_close': first_row['Open'],
+                'open': first_row['Open'],
+                'day_high': hist['High'].max(),
+                'day_low': hist['Low'].min(),
                 'volume': hist['Volume'].sum(),
                 'timestamp': hist.index[-1],
                 'currency': 'BRL' if is_brazilian else 'USD'
@@ -717,13 +705,6 @@ else:
                         # Buscar info apenas se df não estiver vazio
                         if not df.empty:
                             info = fetch_ticker_info_safe(ticker)
-                            
-                            # Converter para BRL se for ação brasileira
-                            if '.SA' in selected_stock.upper():
-                                usd_to_brl = get_usd_to_brl()
-                                for col in ['Open', 'High', 'Low', 'Close']:
-                                    if col in df.columns:
-                                        df[col] = df[col] * usd_to_brl
                             
                             # Salvar no cache - resetar índice para evitar erro com Timestamp
                             df_cache = df.reset_index()
