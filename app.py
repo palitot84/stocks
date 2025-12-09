@@ -34,8 +34,16 @@ def load_data():
 
 def save_data(data):
     """Salva dados no arquivo JSON"""
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    try:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        # Verificar se foi salvo corretamente
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            saved = json.load(f)
+            return len(saved.get("stocks", [])) == len(data.get("stocks", []))
+    except Exception as e:
+        st.error(f"Erro ao salvar dados: {e}")
+        return False
 
 def load_cache():
     """Carrega cache de dados de ações"""
@@ -188,9 +196,14 @@ def fetch_ticker_info_safe(ticker, max_retries=2):
             return {}
     return {}
 
-# Carregar dados
+# Carregar dados - sempre recarregar do arquivo para garantir persistência
 if 'data' not in st.session_state:
     st.session_state.data = load_data()
+else:
+    # Recarregar do arquivo para garantir que temos a versão mais recente
+    loaded_data = load_data()
+    if loaded_data != st.session_state.data:
+        st.session_state.data = loaded_data
 
 if 'cache' not in st.session_state:
     st.session_state.cache = load_cache()
@@ -271,6 +284,14 @@ def get_current_price(ticker_symbol):
 
 # Título principal
 st.title("📈 Sistema de Análise de Ações")
+
+# Info de persistência
+if os.path.exists(DATA_FILE):
+    file_time = datetime.fromtimestamp(os.path.getmtime(DATA_FILE))
+    st.caption(f"📁 Dados carregados de: {DATA_FILE} | Última modificação: {file_time.strftime('%d/%m/%Y %H:%M:%S')}")
+else:
+    st.caption(f"📁 Arquivo de dados será criado em: {os.path.abspath(DATA_FILE)}")
+
 st.markdown("---")
 
 # Sidebar para configurações
@@ -291,9 +312,12 @@ with st.sidebar:
             if new_stock and new_stock not in st.session_state.data["stocks"]:
                 # Adicionar ação sem validação estrita
                 st.session_state.data["stocks"].append(new_stock)
-                save_data(st.session_state.data)
-                st.success(f"✅ Ação {new_stock} adicionada!")
-                st.info("💡 Os dados serão carregados ao selecionar a ação.")
+                if save_data(st.session_state.data):
+                    st.success(f"✅ Ação {new_stock} adicionada e salva com sucesso!")
+                    st.info(f"📁 Total de ações cadastradas: {len(st.session_state.data['stocks'])}")
+                else:
+                    st.error("❌ Erro ao salvar a ação. Tente novamente.")
+                time.sleep(0.5)  # Pequeno delay para garantir que a mensagem seja vista
                 st.rerun()
             elif new_stock in st.session_state.data["stocks"]:
                 st.warning("⚠️ Ação já cadastrada!")
@@ -302,7 +326,7 @@ with st.sidebar:
     
     # Lista de ações cadastradas
     if st.session_state.data["stocks"]:
-        st.write("**Ações Cadastradas:**")
+        st.write(f"**Ações Cadastradas ({len(st.session_state.data['stocks'])}):**")
         for stock in st.session_state.data["stocks"]:
             col1, col2 = st.columns([3, 1])
             with col1:
@@ -310,7 +334,9 @@ with st.sidebar:
             with col2:
                 if st.button("🗑️", key=f"del_{stock}"):
                     st.session_state.data["stocks"].remove(stock)
-                    save_data(st.session_state.data)
+                    if save_data(st.session_state.data):
+                        st.success(f"✅ {stock} removida!")
+                    time.sleep(0.3)
                     st.rerun()
     else:
         st.info("Nenhuma ação cadastrada ainda.")
