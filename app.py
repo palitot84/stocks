@@ -7,8 +7,6 @@ import json
 import os
 import time
 from functools import lru_cache
-import ssl
-import certifi
 
 # Configuração da página
 st.set_page_config(page_title="Análise de Ações", layout="wide", page_icon="📈")
@@ -18,26 +16,6 @@ DATA_FILE = "stocks_data.json"
 CACHE_FILE = "stocks_cache.json"
 CACHE_DURATION = 300  # Cache duration in seconds (5 minutes)
 REQUEST_DELAY = 2  # Delay between requests in seconds
-
-# Configuração de certificado SSL para redes corporativas
-CERT_FILE = "petrobras-ca-root.pem"
-
-def setup_ssl_cert():
-    """Configura certificado SSL customizado se disponível"""
-    if os.path.exists(CERT_FILE):
-        try:
-            # Configurar variáveis de ambiente para requests/urllib
-            os.environ['REQUESTS_CA_BUNDLE'] = os.path.abspath(CERT_FILE)
-            os.environ['CURL_CA_BUNDLE'] = os.path.abspath(CERT_FILE)
-            os.environ['SSL_CERT_FILE'] = os.path.abspath(CERT_FILE)
-            return True
-        except Exception as e:
-            st.warning(f"⚠️ Não foi possível configurar certificado SSL: {e}")
-            return False
-    return False
-
-# Tentar configurar SSL no início
-ssl_configured = setup_ssl_cert()
 
 # Inicializar dados
 def load_data():
@@ -156,10 +134,6 @@ def try_alternative_download(stock, period_value):
         
         time.sleep(REQUEST_DELAY * 0.5)  # Shorter delay for alternative method
         
-        # Reconfigurar SSL antes de cada requisição (para redes corporativas)
-        if os.path.exists(CERT_FILE):
-            os.environ['REQUESTS_CA_BUNDLE'] = os.path.abspath(CERT_FILE)
-        
         # Usar yf.download que tem melhor tratamento de cookies/crumbs
         df = yf.download(
             stock,
@@ -177,8 +151,6 @@ def try_alternative_download(stock, period_value):
             df.columns = df.columns.droplevel(1)
             
         return df, None
-    except ssl.SSLError as e:
-        return pd.DataFrame(), f"Erro SSL: {str(e)} - Verifique o certificado {CERT_FILE}"
     except Exception as e:
         return pd.DataFrame(), str(e)
 
@@ -234,6 +206,7 @@ ALL_YAHOO_FIELDS = [
 
 # Opções de período
 PERIOD_OPTIONS = {
+    "Hoje (Tempo Real)": "1d",
     "1 Semana": "7d",
     "1 Mês": "1mo",
     "No Ano (YTD)": "ytd",
@@ -242,18 +215,47 @@ PERIOD_OPTIONS = {
     "5 Anos": "5y"
 }
 
+def get_current_price(ticker_symbol):
+    """Obtém preço atual com delay de 10 minutos"""
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        
+        # Tentar fast_info primeiro (mais rápido)
+        try:
+            fast_info = ticker.fast_info
+            return {
+                'price': fast_info.last_price,
+                'previous_close': fast_info.previous_close,
+                'open': fast_info.open,
+                'day_high': fast_info.day_high,
+                'day_low': fast_info.day_low,
+                'volume': fast_info.last_volume,
+                'timestamp': datetime.now() - timedelta(minutes=10)
+            }
+        except:
+            pass
+        
+        # Fallback: pegar dados do último dia
+        hist = ticker.history(period='1d', interval='1m')
+        if not hist.empty:
+            last_row = hist.iloc[-1]
+            first_row = hist.iloc[0]
+            return {
+                'price': last_row['Close'],
+                'previous_close': first_row['Open'],
+                'open': first_row['Open'],
+                'day_high': hist['High'].max(),
+                'day_low': hist['Low'].min(),
+                'volume': hist['Volume'].sum(),
+                'timestamp': hist.index[-1]
+            }
+        
+        return None
+    except:
+        return None
+
 # Título principal
 st.title("📈 Sistema de Análise de Ações")
-
-# Mostrar status do certificado SSL
-if ssl_configured:
-    st.success(f"🔒 Certificado SSL corporativo configurado: {CERT_FILE}")
-else:
-    if os.path.exists(CERT_FILE):
-        st.warning("⚠️ Certificado encontrado mas não pôde ser configurado")
-    else:
-        st.info(f"ℹ️ Usando certificados padrão do sistema (não encontrado: {CERT_FILE})")
-
 st.markdown("---")
 
 # Sidebar para configurações
@@ -360,95 +362,290 @@ with st.sidebar:
     else:
         st.info("Nenhum filtro cadastrado ainda.")
 
+def calcular_variacao(ticker_symbol, dias):
+    """Calcula variação percentual para um período específico"""
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=dias + 5)  # Margem extra
+        
+        hist = ticker.history(start=start_date, end=end_date)
+        
+        if len(hist) >= 2:
+            preco_inicial = hist['Close'].iloc[0]
+            preco_final = hist['Close'].iloc[-1]
+            variacao = ((preco_final - preco_inicial) / preco_inicial) * 100
+            return variacao, preco_final
+        return None, None
+    except:
+        return None, None
+
+def gerar_relatorio_comparativo(lista_acoes):
+    """Gera relatório comparativo de todas as ações"""
+    relatorio = []
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for i, ticker_symbol in enumerate(lista_acoes):
+        status_text.text(f"Processando {ticker_symbol}... ({i+1}/{len(lista_acoes)})")
+        
+        linha = {'Ação': ticker_symbol}
+        
+        # Preço atual
+        current_data = get_current_price(ticker_symbol)
+        if current_data:
+            linha['Preço Atual'] = current_data['price']
+        else:
+            linha['Preço Atual'] = None
+        
+        # Calcular variações
+        var_1d, _ = calcular_variacao(ticker_symbol, 1)
+        var_7d, _ = calcular_variacao(ticker_symbol, 7)
+        var_30d, _ = calcular_variacao(ticker_symbol, 30)
+        var_90d, _ = calcular_variacao(ticker_symbol, 90)
+        var_180d, _ = calcular_variacao(ticker_symbol, 180)
+        var_365d, _ = calcular_variacao(ticker_symbol, 365)
+        
+        linha['Var. Dia (%)'] = var_1d
+        linha['Var. 7 Dias (%)'] = var_7d
+        linha['Var. Mês (%)'] = var_30d
+        linha['Var. 30 Dias (%)'] = var_30d
+        linha['Var. Trimestre (%)'] = var_90d
+        linha['Var. Semestre (%)'] = var_180d
+        linha['Var. Ano (%)'] = var_365d
+        
+        relatorio.append(linha)
+        
+        progress_bar.progress((i + 1) / len(lista_acoes))
+        time.sleep(0.5)  # Evitar rate limiting
+    
+    progress_bar.empty()
+    status_text.empty()
+    
+    return pd.DataFrame(relatorio)
+
 # Área principal
 if not st.session_state.data["stocks"]:
     st.info("👈 Comece cadastrando ações na barra lateral!")
 else:
-    # Seleção de ação
-    col1, col2 = st.columns([2, 1])
+    # Tabs para organizar conteúdo
+    tab1, tab2 = st.tabs(["📊 Análise Individual", "📋 Relatório Comparativo"])
     
-    with col1:
-        selected_stock = st.selectbox(
-            "Selecione uma Ação",
-            st.session_state.data["stocks"],
-            key="stock_selector"
-        )
-    
-    with col2:
-        selected_period = st.selectbox(
-            "Período",
-            list(PERIOD_OPTIONS.keys()),
-            key="period_selector"
-        )
-    
-    if selected_stock:
-        try:
-            period_value = PERIOD_OPTIONS[selected_period]
-            cache_key = get_cache_key(selected_stock, period_value)
+    with tab2:
+        st.header("📋 Relatório Comparativo de Ações")
+        st.write("Compare o desempenho de todas as ações cadastradas")
+        
+        if st.button("🔄 Gerar Relatório", type="primary"):
+            with st.spinner("Gerando relatório comparativo..."):
+                df_relatorio = gerar_relatorio_comparativo(st.session_state.data["stocks"])
+                st.session_state.relatorio = df_relatorio
+        
+        if 'relatorio' in st.session_state and not st.session_state.relatorio.empty:
+            df = st.session_state.relatorio
             
-            # Verificar cache primeiro
-            if cache_key in st.session_state.cache and is_cache_valid(st.session_state.cache[cache_key]):
-                st.info("📦 Carregando dados do cache (dados atualizados nos últimos 5 minutos)")
-                cached_data = st.session_state.cache[cache_key]
-                df = pd.DataFrame(cached_data['data'])
-                df.index = pd.to_datetime(df.index)
-                info = cached_data.get('info', {})
-            else:
-                # Rate limiting - garantir intervalo mínimo entre requisições
-                time_since_last_request = time.time() - st.session_state.last_request_time
-                if time_since_last_request < REQUEST_DELAY:
-                    wait_time = REQUEST_DELAY - time_since_last_request
-                    st.info(f"⏳ Aguardando {wait_time:.1f}s para evitar limite de requisições...")
-                    time.sleep(wait_time)
+            # Opções de ordenação
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                coluna_ordenacao = st.selectbox(
+                    "Ordenar por:",
+                    ['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. Mês (%)', 'Var. 30 Dias (%)', 
+                     'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. Ano (%)', 'Preço Atual'],
+                    key="ordem_col"
+                )
+            with col2:
+                ordem_crescente = st.checkbox("Crescente", value=False, key="ordem_cresc")
+            
+            # Ordenar dataframe
+            df_ordenado = df.sort_values(by=coluna_ordenacao, ascending=ordem_crescente, na_position='last')
+            
+            # Estilizar dataframe
+            def colorir_celulas(val):
+                if pd.isna(val):
+                    return ''
+                if isinstance(val, (int, float)):
+                    if val > 0:
+                        return 'background-color: #90EE90; color: #006400'
+                    elif val < 0:
+                        return 'background-color: #FFB6C1; color: #8B0000'
+                return ''
+            
+            # Aplicar formatação
+            df_styled = df_ordenado.style.applymap(
+                colorir_celulas, 
+                subset=['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. Mês (%)', 'Var. 30 Dias (%)', 
+                        'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. Ano (%)']
+            ).format({
+                'Preço Atual': '${:.2f}',
+                'Var. Dia (%)': '{:.2f}%',
+                'Var. 7 Dias (%)': '{:.2f}%',
+                'Var. Mês (%)': '{:.2f}%',
+                'Var. 30 Dias (%)': '{:.2f}%',
+                'Var. Trimestre (%)': '{:.2f}%',
+                'Var. Semestre (%)': '{:.2f}%',
+                'Var. Ano (%)': '{:.2f}%'
+            }, na_rep='N/A')
+            
+            st.dataframe(df_styled, use_container_width=True, height=400)
+            
+            # Estatísticas resumidas
+            st.subheader("📊 Estatísticas do Relatório")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                melhor_dia = df.loc[df['Var. Dia (%)'].idxmax()] if not df['Var. Dia (%)'].isna().all() else None
+                if melhor_dia is not None:
+                    st.metric("🏆 Melhor do Dia", melhor_dia['Ação'], f"+{melhor_dia['Var. Dia (%)']:.2f}%")
+            
+            with col2:
+                melhor_semana = df.loc[df['Var. 7 Dias (%)'].idxmax()] if not df['Var. 7 Dias (%)'].isna().all() else None
+                if melhor_semana is not None:
+                    st.metric("🏆 Melhor da Semana", melhor_semana['Ação'], f"+{melhor_semana['Var. 7 Dias (%)']:.2f}%")
+            
+            with col3:
+                melhor_mes = df.loc[df['Var. Mês (%)'].idxmax()] if not df['Var. Mês (%)'].isna().all() else None
+                if melhor_mes is not None:
+                    st.metric("🏆 Melhor do Mês", melhor_mes['Ação'], f"+{melhor_mes['Var. Mês (%)']:.2f}%")
+            
+            with col4:
+                melhor_ano = df.loc[df['Var. Ano (%)'].idxmax()] if not df['Var. Ano (%)'].isna().all() else None
+                if melhor_ano is not None:
+                    st.metric("🏆 Melhor do Ano", melhor_ano['Ação'], f"+{melhor_ano['Var. Ano (%)']:.2f}%")
+            
+            # Download CSV
+            csv = df_ordenado.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Relatório (CSV)",
+                data=csv,
+                file_name=f"relatorio_acoes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+    
+    with tab1:
+        st.header("📊 Análise Individual de Ação")
+        
+        # Seleção de ação
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            selected_stock = st.selectbox(
+                "Selecione uma Ação",
+                st.session_state.data["stocks"],
+                key="stock_selector"
+            )
+        
+        with col2:
+            selected_period = st.selectbox(
+                "Período",
+                list(PERIOD_OPTIONS.keys()),
+                key="period_selector"
+            )
+        
+        if selected_stock:
+            # Mostrar preço atual primeiro (delay de 10 min)
+            st.subheader(f"💹 Preço Atual - {selected_stock}")
+            current_price_data = get_current_price(selected_stock)
+            
+            if current_price_data:
+                col1, col2, col3, col4, col5 = st.columns(5)
                 
-                # Buscar dados com retry
-                with st.spinner(f"🔄 Buscando dados de {selected_stock}..."):
-                    ticker = yf.Ticker(selected_stock)
-                    df, error = fetch_stock_data_with_retry(ticker, period_value)
-                    st.session_state.last_request_time = time.time()
+                price_change = current_price_data['price'] - current_price_data['previous_close']
+                price_change_pct = (price_change / current_price_data['previous_close']) * 100 if current_price_data['previous_close'] != 0 else 0
+                
+                with col1:
+                    st.metric(
+                        "Preço", 
+                        f"${current_price_data['price']:.2f}",
+                        f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
+                    )
+                
+                with col2:
+                    st.metric("Abertura", f"${current_price_data['open']:.2f}")
+                
+                with col3:
+                    st.metric("Máxima do Dia", f"${current_price_data['day_high']:.2f}")
+                
+                with col4:
+                    st.metric("Mínima do Dia", f"${current_price_data['day_low']:.2f}")
+                
+                with col5:
+                    st.metric("Volume", f"{current_price_data['volume']:,.0f}")
+                
+                st.caption(f"⏰ Dados com delay de ~10 minutos | Atualizado: {current_price_data['timestamp'].strftime('%H:%M:%S')}")
+            else:
+                st.warning("⚠️ Não foi possível obter preço atual")
+            
+            st.markdown("---")
+            
+            try:
+                period_value = PERIOD_OPTIONS[selected_period]
+                cache_key = get_cache_key(selected_stock, period_value)
+                
+                # Verificar cache primeiro
+                if cache_key in st.session_state.cache and is_cache_valid(st.session_state.cache[cache_key]):
+                    st.info("📦 Carregando dados do cache (dados atualizados nos últimos 5 minutos)")
+                    cached_data = st.session_state.cache[cache_key]
                     
-                    if error:
-                        st.error(f"❌ {error}")
-                        if "429" in error or "Too Many" in error:
-                            st.warning("⚠️ Limite de requisições do Yahoo Finance atingido.")
-                            st.info("💡 Aguarde alguns minutos antes de tentar novamente, ou use dados do cache se disponíveis.")
-                        elif "Crumb" in error or "Unauthorized" in error:
-                            st.warning("⚠️ Erro de autenticação do Yahoo Finance.")
-                            st.info("💡 Este erro é temporário. Tente novamente em alguns segundos.")
-                        elif "SSL" in error or "certificate" in error.lower():
-                            st.warning("⚠️ Erro de certificado SSL.")
-                            if not os.path.exists(CERT_FILE):
-                                st.error(f"🔒 Certificado não encontrado: {CERT_FILE}")
-                                st.info("💡 Verifique se o arquivo petrobras-ca-root.pem está na mesma pasta do app.py")
-                            else:
-                                st.info("💡 Certificado encontrado mas pode estar inválido ou expirado.")
-                        df = pd.DataFrame()
+                    # Reconstruir DataFrame do cache
+                    df = pd.DataFrame(cached_data['data'])
+                    if 'Date' in df.columns:
+                        df['Date'] = pd.to_datetime(df['Date'])
+                        df.set_index('Date', inplace=True)
                     
-                    # Buscar info apenas se df não estiver vazio
-                    if not df.empty:
-                        info = fetch_ticker_info_safe(ticker)
+                    info = cached_data.get('info', {})
+                else:
+                    # Rate limiting - garantir intervalo mínimo entre requisições
+                    time_since_last_request = time.time() - st.session_state.last_request_time
+                    if time_since_last_request < REQUEST_DELAY:
+                        wait_time = REQUEST_DELAY - time_since_last_request
+                        st.info(f"⏳ Aguardando {wait_time:.1f}s para evitar limite de requisições...")
+                        time.sleep(wait_time)
+                    
+                    # Buscar dados com retry
+                    with st.spinner(f"🔄 Buscando dados de {selected_stock}..."):
+                        ticker = yf.Ticker(selected_stock)
+                        df, error = fetch_stock_data_with_retry(ticker, period_value)
+                        st.session_state.last_request_time = time.time()
                         
-                        # Salvar no cache
-                        st.session_state.cache[cache_key] = {
-                            'data': df.to_dict(),
-                            'info': info,
-                            'timestamp': time.time()
-                        }
-                        save_cache(st.session_state.cache)
-                    else:
-                        info = {}
-            
-            if df.empty:
-                st.error(f"❌ Não foi possível obter dados para {selected_stock} no período selecionado.")
-                st.info("💡 Dicas: Verifique se o ticker está correto (ex: AAPL, MSFT, PETR4.SA para ações brasileiras)")
-            else:
-                # Garantir que as colunas necessárias existam
-                if 'Dividends' not in df.columns:
-                    df['Dividends'] = 0
-                if 'Stock Splits' not in df.columns:
-                    df['Stock Splits'] = 0
+                        if error:
+                            st.error(f"❌ {error}")
+                            if "429" in error or "Too Many" in error:
+                                st.warning("⚠️ Limite de requisições do Yahoo Finance atingido.")
+                                st.info("💡 Aguarde alguns minutos antes de tentar novamente, ou use dados do cache se disponíveis.")
+                            elif "Crumb" in error or "Unauthorized" in error:
+                                st.warning("⚠️ Erro de autenticação do Yahoo Finance.")
+                                st.info("💡 Este erro é temporário. Tente novamente em alguns segundos.")
+                            df = pd.DataFrame()
+                        
+                        # Buscar info apenas se df não estiver vazio
+                        if not df.empty:
+                            info = fetch_ticker_info_safe(ticker)
+                            
+                            # Salvar no cache - resetar índice para evitar erro com Timestamp
+                            df_cache = df.reset_index()
+                            df_cache['Date'] = df_cache['Date'].astype(str)
+                            
+                            st.session_state.cache[cache_key] = {
+                                'data': df_cache.to_dict('records'),
+                                'index': df.index.astype(str).tolist(),
+                                'info': info,
+                                'timestamp': time.time()
+                            }
+                            save_cache(st.session_state.cache)
+                        else:
+                            info = {}
                 
-                # Informações principais
+                if df.empty:
+                    st.error(f"❌ Não foi possível obter dados para {selected_stock} no período selecionado.")
+                    st.info("💡 Dicas: Verifique se o ticker está correto (ex: AAPL, MSFT, PETR4.SA para ações brasileiras)")
+                else:
+                    # Garantir que as colunas necessárias existam
+                    if 'Dividends' not in df.columns:
+                        df['Dividends'] = 0
+                    if 'Stock Splits' not in df.columns:
+                        df['Stock Splits'] = 0
+                    
+                    # Informações principais
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
@@ -591,9 +788,9 @@ else:
                     st.write(f"**Market Cap:** ${info.get('marketCap', 0):,.0f}" if info.get('marketCap') else "N/A")
                     st.write(f"**P/E Ratio:** {info.get('trailingPE', 'N/A')}")
                     st.write(f"**Dividend Yield:** {info.get('dividendYield', 'N/A')}")
-                
-        except Exception as e:
-            st.error(f"❌ Erro ao carregar dados: {str(e)}")
+            
+            except Exception as e:
+                st.error(f"❌ Erro ao carregar dados: {str(e)}")
             st.info("💡 Possíveis soluções:")
             st.markdown("""
             - Verifique se o ticker está correto
