@@ -215,22 +215,36 @@ PERIOD_OPTIONS = {
     "5 Anos": "5y"
 }
 
+def get_usd_to_brl():
+    """Obtém cotação USD/BRL"""
+    try:
+        usdbrl = yf.Ticker('USDBRL=X')
+        hist = usdbrl.history(period='1d')
+        if not hist.empty:
+            return hist['Close'].iloc[-1]
+        return 5.0  # Fallback
+    except:
+        return 5.0  # Fallback
+
 def get_current_price(ticker_symbol):
     """Obtém preço atual com delay de 10 minutos"""
     try:
         ticker = yf.Ticker(ticker_symbol)
+        is_brazilian = '.SA' in ticker_symbol.upper()
+        usd_to_brl = get_usd_to_brl() if is_brazilian else 1.0
         
         # Tentar fast_info primeiro (mais rápido)
         try:
             fast_info = ticker.fast_info
             return {
-                'price': fast_info.last_price,
-                'previous_close': fast_info.previous_close,
-                'open': fast_info.open,
-                'day_high': fast_info.day_high,
-                'day_low': fast_info.day_low,
+                'price': fast_info.last_price * usd_to_brl,
+                'previous_close': fast_info.previous_close * usd_to_brl,
+                'open': fast_info.open * usd_to_brl,
+                'day_high': fast_info.day_high * usd_to_brl,
+                'day_low': fast_info.day_low * usd_to_brl,
                 'volume': fast_info.last_volume,
-                'timestamp': datetime.now() - timedelta(minutes=10)
+                'timestamp': datetime.now() - timedelta(minutes=10),
+                'currency': 'BRL' if is_brazilian else 'USD'
             }
         except:
             pass
@@ -241,13 +255,14 @@ def get_current_price(ticker_symbol):
             last_row = hist.iloc[-1]
             first_row = hist.iloc[0]
             return {
-                'price': last_row['Close'],
-                'previous_close': first_row['Open'],
-                'open': first_row['Open'],
-                'day_high': hist['High'].max(),
-                'day_low': hist['Low'].min(),
+                'price': last_row['Close'] * usd_to_brl,
+                'previous_close': first_row['Open'] * usd_to_brl,
+                'open': first_row['Open'] * usd_to_brl,
+                'day_high': hist['High'].max() * usd_to_brl,
+                'day_low': hist['Low'].min() * usd_to_brl,
                 'volume': hist['Volume'].sum(),
-                'timestamp': hist.index[-1]
+                'timestamp': hist.index[-1],
+                'currency': 'BRL' if is_brazilian else 'USD'
             }
         
         return None
@@ -490,35 +505,89 @@ else:
             
             # Estatísticas resumidas
             st.subheader("📊 Estatísticas do Relatório")
-            col1, col2, col3, col4 = st.columns(4)
+            
+            # Melhores
+            st.write("### 🏆 Melhores Performances")
+            col1, col2, col3, col4, col5, col6 = st.columns(6)
             
             with col1:
                 melhor_dia = df.loc[df['Var. Dia (%)'].idxmax()] if not df['Var. Dia (%)'].isna().all() else None
                 if melhor_dia is not None:
-                    st.metric("🏆 Melhor do Dia", melhor_dia['Ação'], f"+{melhor_dia['Var. Dia (%)']:.2f}%")
+                    st.metric("Dia", melhor_dia['Ação'], f"+{melhor_dia['Var. Dia (%)']:.2f}%")
             
             with col2:
                 melhor_semana = df.loc[df['Var. 7 Dias (%)'].idxmax()] if not df['Var. 7 Dias (%)'].isna().all() else None
                 if melhor_semana is not None:
-                    st.metric("🏆 Melhor da Semana", melhor_semana['Ação'], f"+{melhor_semana['Var. 7 Dias (%)']:.2f}%")
+                    st.metric("Semana", melhor_semana['Ação'], f"+{melhor_semana['Var. 7 Dias (%)']:.2f}%")
             
             with col3:
                 melhor_mes = df.loc[df['Var. Mês (%)'].idxmax()] if not df['Var. Mês (%)'].isna().all() else None
                 if melhor_mes is not None:
-                    st.metric("🏆 Melhor do Mês", melhor_mes['Ação'], f"+{melhor_mes['Var. Mês (%)']:.2f}%")
+                    st.metric("Mês", melhor_mes['Ação'], f"+{melhor_mes['Var. Mês (%)']:.2f}%")
             
             with col4:
+                melhor_trimestre = df.loc[df['Var. Trimestre (%)'].idxmax()] if not df['Var. Trimestre (%)'].isna().all() else None
+                if melhor_trimestre is not None:
+                    st.metric("Trimestre", melhor_trimestre['Ação'], f"+{melhor_trimestre['Var. Trimestre (%)']:.2f}%")
+            
+            with col5:
+                melhor_semestre = df.loc[df['Var. Semestre (%)'].idxmax()] if not df['Var. Semestre (%)'].isna().all() else None
+                if melhor_semestre is not None:
+                    st.metric("Semestre", melhor_semestre['Ação'], f"+{melhor_semestre['Var. Semestre (%)']:.2f}%")
+            
+            with col6:
                 melhor_ano = df.loc[df['Var. Ano (%)'].idxmax()] if not df['Var. Ano (%)'].isna().all() else None
                 if melhor_ano is not None:
-                    st.metric("🏆 Melhor do Ano", melhor_ano['Ação'], f"+{melhor_ano['Var. Ano (%)']:.2f}%")
+                    st.metric("Ano", melhor_ano['Ação'], f"+{melhor_ano['Var. Ano (%)']:.2f}%")
             
-            # Download CSV
-            csv = df_ordenado.to_csv(index=False)
+            st.markdown("---")
+            
+            # Piores
+            st.write("### 📉 Piores Performances")
+            col1, col2, col3, col4, col5, col6 = st.columns(6)
+            
+            with col1:
+                pior_dia = df.loc[df['Var. Dia (%)'].idxmin()] if not df['Var. Dia (%)'].isna().all() else None
+                if pior_dia is not None:
+                    st.metric("Dia", pior_dia['Ação'], f"{pior_dia['Var. Dia (%)']:.2f}%")
+            
+            with col2:
+                pior_semana = df.loc[df['Var. 7 Dias (%)'].idxmin()] if not df['Var. 7 Dias (%)'].isna().all() else None
+                if pior_semana is not None:
+                    st.metric("Semana", pior_semana['Ação'], f"{pior_semana['Var. 7 Dias (%)']:.2f}%")
+            
+            with col3:
+                pior_mes = df.loc[df['Var. Mês (%)'].idxmin()] if not df['Var. Mês (%)'].isna().all() else None
+                if pior_mes is not None:
+                    st.metric("Mês", pior_mes['Ação'], f"{pior_mes['Var. Mês (%)']:.2f}%")
+            
+            with col4:
+                pior_trimestre = df.loc[df['Var. Trimestre (%)'].idxmin()] if not df['Var. Trimestre (%)'].isna().all() else None
+                if pior_trimestre is not None:
+                    st.metric("Trimestre", pior_trimestre['Ação'], f"{pior_trimestre['Var. Trimestre (%)']:.2f}%")
+            
+            with col5:
+                pior_semestre = df.loc[df['Var. Semestre (%)'].idxmin()] if not df['Var. Semestre (%)'].isna().all() else None
+                if pior_semestre is not None:
+                    st.metric("Semestre", pior_semestre['Ação'], f"{pior_semestre['Var. Semestre (%)']:.2f}%")
+            
+            with col6:
+                pior_ano = df.loc[df['Var. Ano (%)'].idxmin()] if not df['Var. Ano (%)'].isna().all() else None
+                if pior_ano is not None:
+                    st.metric("Ano", pior_ano['Ação'], f"{pior_ano['Var. Ano (%)']:.2f}%")
+            
+            # Download Excel
+            from io import BytesIO
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_ordenado.to_excel(writer, index=False, sheet_name='Relatório')
+            buffer.seek(0)
+            
             st.download_button(
-                label="📥 Download Relatório (CSV)",
-                data=csv,
-                file_name=f"relatorio_acoes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
+                label="📥 Download Relatório (Excel)",
+                data=buffer,
+                file_name=f"relatorio_acoes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
     
     with tab1:
@@ -552,21 +621,23 @@ else:
                 price_change = current_price_data['price'] - current_price_data['previous_close']
                 price_change_pct = (price_change / current_price_data['previous_close']) * 100 if current_price_data['previous_close'] != 0 else 0
                 
+                currency_symbol = 'R$' if current_price_data.get('currency') == 'BRL' else '$'
+                
                 with col1:
                     st.metric(
                         "Preço", 
-                        f"${current_price_data['price']:.2f}",
+                        f"{currency_symbol}{current_price_data['price']:.2f}",
                         f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
                     )
                 
                 with col2:
-                    st.metric("Abertura", f"${current_price_data['open']:.2f}")
+                    st.metric("Abertura", f"{currency_symbol}{current_price_data['open']:.2f}")
                 
                 with col3:
-                    st.metric("Máxima do Dia", f"${current_price_data['day_high']:.2f}")
+                    st.metric("Máxima do Dia", f"{currency_symbol}{current_price_data['day_high']:.2f}")
                 
                 with col4:
-                    st.metric("Mínima do Dia", f"${current_price_data['day_low']:.2f}")
+                    st.metric("Mínima do Dia", f"{currency_symbol}{current_price_data['day_low']:.2f}")
                 
                 with col5:
                     st.metric("Volume", f"{current_price_data['volume']:,.0f}")
@@ -621,6 +692,13 @@ else:
                         if not df.empty:
                             info = fetch_ticker_info_safe(ticker)
                             
+                            # Converter para BRL se for ação brasileira
+                            if '.SA' in selected_stock.upper():
+                                usd_to_brl = get_usd_to_brl()
+                                for col in ['Open', 'High', 'Low', 'Close']:
+                                    if col in df.columns:
+                                        df[col] = df[col] * usd_to_brl
+                            
                             # Salvar no cache - resetar índice para evitar erro com Timestamp
                             df_cache = df.reset_index()
                             df_cache['Date'] = df_cache['Date'].astype(str)
@@ -646,20 +724,22 @@ else:
                         df['Stock Splits'] = 0
                     
                     # Informações principais
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric(
-                        "Preço Atual", 
-                        f"${df['Close'].iloc[-1]:.2f}" if not df.empty else "N/A",
-                        f"{((df['Close'].iloc[-1] - df['Close'].iloc[0]) / df['Close'].iloc[0] * 100):.2f}%" if len(df) > 1 else "0%"
-                    )
-                
-                with col2:
-                    st.metric("Máxima do Período", f"${df['High'].max():.2f}" if not df.empty else "N/A")
-                
-                with col3:
-                    st.metric("Mínima do Período", f"${df['Low'].min():.2f}" if not df.empty else "N/A")
+                    currency_symbol = 'R$' if '.SA' in selected_stock.upper() else '$'
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric(
+                            "Preço Atual", 
+                            f"{currency_symbol}{df['Close'].iloc[-1]:.2f}" if not df.empty else "N/A",
+                            f"{((df['Close'].iloc[-1] - df['Close'].iloc[0]) / df['Close'].iloc[0] * 100):.2f}%" if len(df) > 1 else "0%"
+                        )
+                    
+                    with col2:
+                        st.metric("Máxima do Período", f"{currency_symbol}{df['High'].max():.2f}" if not df.empty else "N/A")
+                    
+                    with col3:
+                        st.metric("Mínima do Período", f"{currency_symbol}{df['Low'].min():.2f}" if not df.empty else "N/A")
                 
                 with col4:
                     st.metric("Volume Médio", f"{df['Volume'].mean():,.0f}" if not df.empty else "N/A")
@@ -678,9 +758,11 @@ else:
                     name=selected_stock
                 )])
                 
+                currency_name = 'BRL' if '.SA' in selected_stock.upper() else 'USD'
+                
                 fig.update_layout(
                     title=f"{selected_stock} - {selected_period}",
-                    yaxis_title="Preço (USD)",
+                    yaxis_title=f"Preço ({currency_name})",
                     xaxis_title="Data",
                     height=500,
                     template="plotly_white",
