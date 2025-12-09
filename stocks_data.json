@@ -1,0 +1,17 @@
+{
+  "stocks": [
+    "PBR",
+    "AAPL",
+    "PETR4.SA"
+  ],
+  "filters": {},
+  "selected_columns": [
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume",
+    "Dividends",
+    "Stock Splits"
+  ]
+}
