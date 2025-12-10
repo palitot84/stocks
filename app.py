@@ -288,120 +288,7 @@ st.markdown("---")
 with st.sidebar:
     st.header("⚙️ Configurações")
     
-    # Seção de Cadastro de Ações
-    st.subheader("📊 Cadastro de Ações")
-    
-    with st.expander("➕ Adicionar Nova Ação"):
-        new_stock = st.text_input(
-            "Ticker da Ação", 
-            placeholder="Ex: AAPL, MSFT, PETR4.SA",
-            key="new_stock_input"
-        ).upper()
-        
-        if st.button("Adicionar Ação", type="primary"):
-            if new_stock and new_stock not in st.session_state.data["stocks"]:
-                # Adicionar ação sem validação estrita
-                st.session_state.data["stocks"].append(new_stock)
-                if save_data(st.session_state.data):
-                    st.success(f"✅ Ação {new_stock} adicionada e salva com sucesso!")
-                    st.info(f"📁 Total de ações cadastradas: {len(st.session_state.data['stocks'])}")
-                else:
-                    st.error("❌ Erro ao salvar a ação. Tente novamente.")
-                time.sleep(0.5)  # Pequeno delay para garantir que a mensagem seja vista
-                st.rerun()
-            elif new_stock in st.session_state.data["stocks"]:
-                st.warning("⚠️ Ação já cadastrada!")
-            else:
-                st.warning("⚠️ Digite um ticker válido!")
-    
-    # Lista de ações cadastradas
-    if st.session_state.data["stocks"]:
-        st.write(f"**Ações Cadastradas ({len(st.session_state.data['stocks'])}):**")
-        for stock in st.session_state.data["stocks"]:
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"• {stock}")
-            with col2:
-                if st.button("🗑️", key=f"del_{stock}"):
-                    st.session_state.data["stocks"].remove(stock)
-                    if save_data(st.session_state.data):
-                        st.success(f"✅ {stock} removida!")
-                    time.sleep(0.3)
-                    st.rerun()
-    else:
-        st.info("Nenhuma ação cadastrada ainda.")
-    
-    st.markdown("---")
-    
-    # Seção de Categorias
-    st.subheader("🏷️ Categorias")
-    
-    with st.expander("➕ Gerenciar Categorias"):
-        st.write("**Adicionar Nova Categoria:**")
-        new_category = st.text_input(
-            "Nome da Categoria",
-            placeholder="Ex: Tecnologia, Financeiro, Energia",
-            key="new_category_input"
-        )
-        
-        if st.button("Adicionar Categoria", type="primary", key="add_cat"):
-            if new_category and new_category not in st.session_state.data.get("category_list", []):
-                if "category_list" not in st.session_state.data:
-                    st.session_state.data["category_list"] = []
-                st.session_state.data["category_list"].append(new_category)
-                save_data(st.session_state.data)
-                st.success(f"✅ Categoria '{new_category}' adicionada!")
-                st.rerun()
-            elif new_category in st.session_state.data.get("category_list", []):
-                st.warning("⚠️ Categoria já existe!")
-            else:
-                st.warning("⚠️ Digite um nome para a categoria!")
-        
-        # Lista de categorias
-        if st.session_state.data.get("category_list"):
-            st.write("**Categorias Cadastradas:**")
-            for cat in st.session_state.data["category_list"]:
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.write(f"• {cat}")
-                with col2:
-                    if st.button("🗑️", key=f"del_cat_{cat}"):
-                        st.session_state.data["category_list"].remove(cat)
-                        # Remover categoria das ações
-                        if "categories" in st.session_state.data:
-                            for stock in list(st.session_state.data["categories"].keys()):
-                                if st.session_state.data["categories"][stock] == cat:
-                                    del st.session_state.data["categories"][stock]
-                        save_data(st.session_state.data)
-                        st.rerun()
-        
-        st.markdown("---")
-        
-        # Associar categoria às ações
-        if st.session_state.data["stocks"] and st.session_state.data.get("category_list"):
-            st.write("**Associar Categorias às Ações:**")
-            
-            if "categories" not in st.session_state.data:
-                st.session_state.data["categories"] = {}
-            
-            for stock in st.session_state.data["stocks"]:
-                current_cat = st.session_state.data["categories"].get(stock, "Sem categoria")
-                selected_cat = st.selectbox(
-                    f"{stock}",
-                    ["Sem categoria"] + st.session_state.data["category_list"],
-                    index=0 if current_cat == "Sem categoria" else st.session_state.data["category_list"].index(current_cat) + 1 if current_cat in st.session_state.data["category_list"] else 0,
-                    key=f"cat_select_{stock}"
-                )
-                
-                if selected_cat != current_cat:
-                    if selected_cat == "Sem categoria":
-                        if stock in st.session_state.data["categories"]:
-                            del st.session_state.data["categories"][stock]
-                    else:
-                        st.session_state.data["categories"][stock] = selected_cat
-                    save_data(st.session_state.data)
-    
-    st.markdown("---")
+
     
     # Seção de Colunas da Tabela
     st.subheader("📋 Colunas da Tabela")
@@ -531,10 +418,10 @@ def gerar_relatorio_comparativo(lista_acoes, categories_dict):
 
 # Área principal
 if not st.session_state.data["stocks"]:
-    st.info("👈 Comece cadastrando ações na barra lateral!")
+    st.info("👈 Comece cadastrando ações na área de Gerenciamento!")
 else:
     # Tabs para organizar conteúdo
-    tab1, tab2 = st.tabs(["📊 Análise Individual", "📋 Relatório Comparativo"])
+    tab1, tab2, tab3 = st.tabs(["📊 Análise Individual", "📋 Relatório Comparativo", "⚙️ Gerenciamento"])
     
     with tab2:
         st.header("📋 Relatório Comparativo de Ações")
@@ -1022,6 +909,234 @@ else:
                 st.write("PETR4.SA (Petrobras), VALE3.SA (Vale), ITUB4.SA (Itaú), BBDC4.SA (Bradesco)")
                 st.write("\n**ADRs (Empresas brasileiras na bolsa americana):**")
                 st.write("PBR (Petrobras ADR), VALE (Vale ADR), ITUB (Itaú ADR)")
+    
+    with tab3:
+        st.header("⚙️ Gerenciamento de Ações e Categorias")
+        
+        # Criar duas colunas para Ações e Categorias
+        col_acoes, col_categorias = st.columns(2)
+        
+        # Coluna de Gerenciamento de Ações
+        with col_acoes:
+            st.subheader("📊 Gerenciamento de Ações")
+            
+            # Adicionar nova ação
+            st.write("**➕ Adicionar Nova Ação:**")
+            new_stock = st.text_input(
+                "Ticker da Ação",
+                placeholder="Ex: AAPL, MSFT, PETR4.SA",
+                key="manage_new_stock"
+            ).upper()
+            
+            if st.button("Adicionar Ação", type="primary", key="manage_add_stock"):
+                if new_stock and new_stock not in st.session_state.data["stocks"]:
+                    st.session_state.data["stocks"].append(new_stock)
+                    if save_data(st.session_state.data):
+                        st.success(f"✅ Ação {new_stock} adicionada!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Erro ao salvar a ação.")
+                elif new_stock in st.session_state.data["stocks"]:
+                    st.warning("⚠️ Ação já cadastrada!")
+                else:
+                    st.warning("⚠️ Digite um ticker válido!")
+            
+            st.markdown("---")
+            
+            # Lista de ações com edição
+            if st.session_state.data["stocks"]:
+                st.write(f"**Ações Cadastradas ({len(st.session_state.data['stocks'])}):**")
+                
+                # Criar DataFrame para exibição
+                acoes_data = []
+                for stock in st.session_state.data["stocks"]:
+                    categoria = st.session_state.data.get("categories", {}).get(stock, "Sem categoria")
+                    acoes_data.append({"Ticker": stock, "Categoria": categoria})
+                
+                df_acoes = pd.DataFrame(acoes_data)
+                
+                # Exibir tabela
+                st.dataframe(df_acoes, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                
+                # Editar ação
+                st.write("**✏️ Editar Ação:**")
+                stock_to_edit = st.selectbox(
+                    "Selecione a ação para editar",
+                    st.session_state.data["stocks"],
+                    key="edit_stock_select"
+                )
+                
+                if stock_to_edit:
+                    new_ticker = st.text_input(
+                        "Novo Ticker",
+                        value=stock_to_edit,
+                        key="edit_stock_ticker"
+                    ).upper()
+                    
+                    # Seleção de categoria
+                    current_cat = st.session_state.data.get("categories", {}).get(stock_to_edit, "Sem categoria")
+                    categories_options = ["Sem categoria"] + st.session_state.data.get("category_list", [])
+                    cat_index = 0 if current_cat == "Sem categoria" else (categories_options.index(current_cat) if current_cat in categories_options else 0)
+                    
+                    new_category = st.selectbox(
+                        "Categoria",
+                        categories_options,
+                        index=cat_index,
+                        key="edit_stock_category"
+                    )
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("💾 Salvar Alterações", type="primary", key="save_edit_stock"):
+                            # Atualizar ticker
+                            if new_ticker != stock_to_edit:
+                                if new_ticker not in st.session_state.data["stocks"]:
+                                    idx = st.session_state.data["stocks"].index(stock_to_edit)
+                                    st.session_state.data["stocks"][idx] = new_ticker
+                                    
+                                    # Atualizar categoria se existir
+                                    if "categories" in st.session_state.data and stock_to_edit in st.session_state.data["categories"]:
+                                        old_cat = st.session_state.data["categories"][stock_to_edit]
+                                        del st.session_state.data["categories"][stock_to_edit]
+                                        if new_category != "Sem categoria":
+                                            st.session_state.data["categories"][new_ticker] = new_category
+                                        elif old_cat != "Sem categoria":
+                                            st.session_state.data["categories"][new_ticker] = old_cat
+                                else:
+                                    st.error(f"❌ Ticker {new_ticker} já existe!")
+                                    st.stop()
+                            
+                            # Atualizar categoria
+                            if "categories" not in st.session_state.data:
+                                st.session_state.data["categories"] = {}
+                            
+                            if new_category == "Sem categoria":
+                                if new_ticker in st.session_state.data["categories"]:
+                                    del st.session_state.data["categories"][new_ticker]
+                            else:
+                                st.session_state.data["categories"][new_ticker] = new_category
+                            
+                            if save_data(st.session_state.data):
+                                st.success("✅ Ação atualizada!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao salvar alterações.")
+                    
+                    with col2:
+                        if st.button("🗑️ Excluir Ação", type="secondary", key="delete_edit_stock"):
+                            st.session_state.data["stocks"].remove(stock_to_edit)
+                            if "categories" in st.session_state.data and stock_to_edit in st.session_state.data["categories"]:
+                                del st.session_state.data["categories"][stock_to_edit]
+                            if save_data(st.session_state.data):
+                                st.success(f"✅ {stock_to_edit} removida!")
+                                st.rerun()
+            else:
+                st.info("Nenhuma ação cadastrada ainda.")
+        
+        # Coluna de Gerenciamento de Categorias
+        with col_categorias:
+            st.subheader("🏷️ Gerenciamento de Categorias")
+            
+            # Adicionar nova categoria
+            st.write("**➕ Adicionar Nova Categoria:**")
+            new_category = st.text_input(
+                "Nome da Categoria",
+                placeholder="Ex: Tecnologia, Financeiro, Energia",
+                key="manage_new_category"
+            )
+            
+            if st.button("Adicionar Categoria", type="primary", key="manage_add_category"):
+                if new_category and new_category not in st.session_state.data.get("category_list", []):
+                    if "category_list" not in st.session_state.data:
+                        st.session_state.data["category_list"] = []
+                    st.session_state.data["category_list"].append(new_category)
+                    if save_data(st.session_state.data):
+                        st.success(f"✅ Categoria '{new_category}' adicionada!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Erro ao salvar a categoria.")
+                elif new_category in st.session_state.data.get("category_list", []):
+                    st.warning("⚠️ Categoria já existe!")
+                else:
+                    st.warning("⚠️ Digite um nome para a categoria!")
+            
+            st.markdown("---")
+            
+            # Lista de categorias
+            if st.session_state.data.get("category_list"):
+                st.write(f"**Categorias Cadastradas ({len(st.session_state.data['category_list'])}):**")
+                
+                # Contar ações por categoria
+                categorias_info = []
+                for cat in st.session_state.data["category_list"]:
+                    count = sum(1 for stock, stock_cat in st.session_state.data.get("categories", {}).items() if stock_cat == cat)
+                    categorias_info.append({"Categoria": cat, "Ações": count})
+                
+                df_categorias = pd.DataFrame(categorias_info)
+                st.dataframe(df_categorias, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                
+                # Editar categoria
+                st.write("**✏️ Editar Categoria:**")
+                category_to_edit = st.selectbox(
+                    "Selecione a categoria para editar",
+                    st.session_state.data["category_list"],
+                    key="edit_category_select"
+                )
+                
+                if category_to_edit:
+                    new_cat_name = st.text_input(
+                        "Novo Nome",
+                        value=category_to_edit,
+                        key="edit_category_name"
+                    )
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("💾 Salvar Alterações", type="primary", key="save_edit_category"):
+                            if new_cat_name != category_to_edit:
+                                if new_cat_name not in st.session_state.data["category_list"]:
+                                    # Atualizar nome da categoria
+                                    idx = st.session_state.data["category_list"].index(category_to_edit)
+                                    st.session_state.data["category_list"][idx] = new_cat_name
+                                    
+                                    # Atualizar referências nas ações
+                                    if "categories" in st.session_state.data:
+                                        for stock, cat in st.session_state.data["categories"].items():
+                                            if cat == category_to_edit:
+                                                st.session_state.data["categories"][stock] = new_cat_name
+                                    
+                                    if save_data(st.session_state.data):
+                                        st.success("✅ Categoria atualizada!")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Erro ao salvar alterações.")
+                                else:
+                                    st.error(f"❌ Categoria '{new_cat_name}' já existe!")
+                            else:
+                                st.info("ℹ️ Nenhuma alteração feita.")
+                    
+                    with col2:
+                        if st.button("🗑️ Excluir Categoria", type="secondary", key="delete_edit_category"):
+                            # Remover categoria
+                            st.session_state.data["category_list"].remove(category_to_edit)
+                            
+                            # Remover associações
+                            if "categories" in st.session_state.data:
+                                stocks_to_update = [stock for stock, cat in st.session_state.data["categories"].items() if cat == category_to_edit]
+                                for stock in stocks_to_update:
+                                    del st.session_state.data["categories"][stock]
+                            
+                            if save_data(st.session_state.data):
+                                st.success(f"✅ Categoria '{category_to_edit}' removida!")
+                                st.rerun()
+            else:
+                st.info("Nenhuma categoria cadastrada ainda.")
 
 # Rodapé
 st.markdown("---")
