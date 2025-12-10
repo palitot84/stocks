@@ -427,11 +427,42 @@ else:
         st.header("📋 Relatório Comparativo de Ações")
         st.write("Compare o desempenho de todas as ações cadastradas")
         
+        # Seleção de categoria
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            categories_available = st.session_state.data.get("category_list", [])
+            if categories_available:
+                selected_categories = st.multiselect(
+                    "Selecione as Categorias:",
+                    options=["Todas"] + categories_available,
+                    default=["Todas"],
+                    key="selected_categories"
+                )
+            else:
+                selected_categories = ["Todas"]
+                st.info("Nenhuma categoria cadastrada. Mostrando todas as ações.")
+        
+        with col2:
+            st.write("")  # Espaçamento
+        
         if st.button("🔄 Gerar Relatório", type="primary"):
             with st.spinner("Gerando relatório comparativo..."):
                 categories_dict = st.session_state.data.get("categories", {})
-                df_relatorio = gerar_relatorio_comparativo(st.session_state.data["stocks"], categories_dict)
-                st.session_state.relatorio = df_relatorio
+                
+                # Filtrar ações por categoria selecionada
+                if "Todas" in selected_categories or not categories_available:
+                    acoes_filtradas = st.session_state.data["stocks"]
+                else:
+                    acoes_filtradas = [
+                        stock for stock in st.session_state.data["stocks"]
+                        if categories_dict.get(stock, "Sem categoria") in selected_categories
+                    ]
+                
+                if acoes_filtradas:
+                    df_relatorio = gerar_relatorio_comparativo(acoes_filtradas, categories_dict)
+                    st.session_state.relatorio = df_relatorio
+                else:
+                    st.warning("⚠️ Nenhuma ação encontrada nas categorias selecionadas!")
         
         if 'relatorio' in st.session_state and not st.session_state.relatorio.empty:
             df = st.session_state.relatorio
