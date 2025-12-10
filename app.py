@@ -493,13 +493,30 @@ else:
                         return 'background-color: #FFB6C1; color: #8B0000'
                 return ''
             
+            # Função para formatar preço com símbolo correto
+            def format_price(row):
+                if pd.isna(row['Preço Atual']):
+                    return 'N/A'
+                symbol = 'R$' if '.SA' in str(row['Ação']).upper() else '$'
+                return f'{symbol}{row["Preço Atual"]:.2f}'
+            
+            # Aplicar formatação de preço
+            df_ordenado['Preço Formatado'] = df_ordenado.apply(format_price, axis=1)
+            
+            # Reordenar colunas para mostrar preço formatado
+            cols = df_ordenado.columns.tolist()
+            cols.remove('Preço Formatado')
+            cols.insert(cols.index('Preço Atual'), 'Preço Formatado')
+            df_display = df_ordenado[cols].copy()
+            df_display = df_display.drop('Preço Atual', axis=1)
+            df_display = df_display.rename(columns={'Preço Formatado': 'Preço Atual'})
+            
             # Aplicar formatação
-            df_styled = df_ordenado.style.applymap(
+            df_styled = df_display.style.applymap(
                 colorir_celulas, 
                 subset=['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. Mês (%)', 'Var. 30 Dias (%)', 
                         'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. Ano (%)']
             ).format({
-                'Preço Atual': '${:.2f}',
                 'Var. Dia (%)': '{:.2f}%',
                 'Var. 7 Dias (%)': '{:.2f}%',
                 'Var. Mês (%)': '{:.2f}%',
@@ -636,8 +653,16 @@ else:
             # Download Excel
             from io import BytesIO
             buffer = BytesIO()
+            
+            # Preparar DataFrame para Excel com preços formatados
+            df_excel = df_ordenado.copy()
+            df_excel['Preço Atual'] = df_excel.apply(
+                lambda row: f"{'R$' if '.SA' in str(row['Ação']).upper() else '$'}{row['Preço Atual']:.2f}" if not pd.isna(row['Preço Atual']) else 'N/A',
+                axis=1
+            )
+            
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                df_ordenado.to_excel(writer, index=False, sheet_name='Relatório')
+                df_excel.to_excel(writer, index=False, sheet_name='Relatório')
             buffer.seek(0)
             
             st.download_button(
