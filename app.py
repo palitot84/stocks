@@ -25,6 +25,8 @@ def load_data():
             return json.load(f)
     return {
         "stocks": [],
+        "categories": {},  # {ticker: category_name}
+        "category_list": [],  # Lista de categorias disponíveis
         "filters": {},
         "selected_columns": [
             "Open", "High", "Low", "Close", "Volume", 
@@ -331,6 +333,76 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # Seção de Categorias
+    st.subheader("🏷️ Categorias")
+    
+    with st.expander("➕ Gerenciar Categorias"):
+        st.write("**Adicionar Nova Categoria:**")
+        new_category = st.text_input(
+            "Nome da Categoria",
+            placeholder="Ex: Tecnologia, Financeiro, Energia",
+            key="new_category_input"
+        )
+        
+        if st.button("Adicionar Categoria", type="primary", key="add_cat"):
+            if new_category and new_category not in st.session_state.data.get("category_list", []):
+                if "category_list" not in st.session_state.data:
+                    st.session_state.data["category_list"] = []
+                st.session_state.data["category_list"].append(new_category)
+                save_data(st.session_state.data)
+                st.success(f"✅ Categoria '{new_category}' adicionada!")
+                st.rerun()
+            elif new_category in st.session_state.data.get("category_list", []):
+                st.warning("⚠️ Categoria já existe!")
+            else:
+                st.warning("⚠️ Digite um nome para a categoria!")
+        
+        # Lista de categorias
+        if st.session_state.data.get("category_list"):
+            st.write("**Categorias Cadastradas:**")
+            for cat in st.session_state.data["category_list"]:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"• {cat}")
+                with col2:
+                    if st.button("🗑️", key=f"del_cat_{cat}"):
+                        st.session_state.data["category_list"].remove(cat)
+                        # Remover categoria das ações
+                        if "categories" in st.session_state.data:
+                            for stock in list(st.session_state.data["categories"].keys()):
+                                if st.session_state.data["categories"][stock] == cat:
+                                    del st.session_state.data["categories"][stock]
+                        save_data(st.session_state.data)
+                        st.rerun()
+        
+        st.markdown("---")
+        
+        # Associar categoria às ações
+        if st.session_state.data["stocks"] and st.session_state.data.get("category_list"):
+            st.write("**Associar Categorias às Ações:**")
+            
+            if "categories" not in st.session_state.data:
+                st.session_state.data["categories"] = {}
+            
+            for stock in st.session_state.data["stocks"]:
+                current_cat = st.session_state.data["categories"].get(stock, "Sem categoria")
+                selected_cat = st.selectbox(
+                    f"{stock}",
+                    ["Sem categoria"] + st.session_state.data["category_list"],
+                    index=0 if current_cat == "Sem categoria" else st.session_state.data["category_list"].index(current_cat) + 1 if current_cat in st.session_state.data["category_list"] else 0,
+                    key=f"cat_select_{stock}"
+                )
+                
+                if selected_cat != current_cat:
+                    if selected_cat == "Sem categoria":
+                        if stock in st.session_state.data["categories"]:
+                            del st.session_state.data["categories"][stock]
+                    else:
+                        st.session_state.data["categories"][stock] = selected_cat
+                    save_data(st.session_state.data)
+    
+    st.markdown("---")
+    
     # Seção de Colunas da Tabela
     st.subheader("📋 Colunas da Tabela")
     
@@ -409,7 +481,7 @@ def calcular_variacao(ticker_symbol, dias):
     except:
         return None, None
 
-def gerar_relatorio_comparativo(lista_acoes):
+def gerar_relatorio_comparativo(lista_acoes, categories_dict):
     """Gera relatório comparativo de todas as ações"""
     relatorio = []
     
@@ -419,7 +491,10 @@ def gerar_relatorio_comparativo(lista_acoes):
     for i, ticker_symbol in enumerate(lista_acoes):
         status_text.text(f"Processando {ticker_symbol}... ({i+1}/{len(lista_acoes)})")
         
-        linha = {'Ação': ticker_symbol}
+        linha = {
+            'Ação': ticker_symbol,
+            'Categoria': categories_dict.get(ticker_symbol, 'Sem categoria')
+        }
         
         # Preço atual
         current_data = get_current_price(ticker_symbol)
@@ -467,7 +542,8 @@ else:
         
         if st.button("🔄 Gerar Relatório", type="primary"):
             with st.spinner("Gerando relatório comparativo..."):
-                df_relatorio = gerar_relatorio_comparativo(st.session_state.data["stocks"])
+                categories_dict = st.session_state.data.get("categories", {})
+                df_relatorio = gerar_relatorio_comparativo(st.session_state.data["stocks"], categories_dict)
                 st.session_state.relatorio = df_relatorio
         
         if 'relatorio' in st.session_state and not st.session_state.relatorio.empty:
@@ -520,8 +596,8 @@ else:
             # Estatísticas resumidas
             st.subheader("📊 Estatísticas do Relatório")
             
-            # Melhores
-            st.write("### 🏆 Melhores Performances")
+            # Estatísticas Gerais
+            st.write("### 🏆 Melhores Performances (Geral)")
             col1, col2, col3, col4, col5, col6 = st.columns(6)
             
             with col1:
@@ -556,8 +632,8 @@ else:
             
             st.markdown("---")
             
-            # Piores
-            st.write("### 📉 Piores Performances")
+            # Piores Gerais
+            st.write("### 📉 Piores Performances (Geral)")
             col1, col2, col3, col4, col5, col6 = st.columns(6)
             
             with col1:
@@ -589,6 +665,55 @@ else:
                 pior_ano = df.loc[df['Var. Ano (%)'].idxmin()] if not df['Var. Ano (%)'].isna().all() else None
                 if pior_ano is not None:
                     st.metric("Ano", pior_ano['Ação'], f"{pior_ano['Var. Ano (%)']:.2f}%")
+            
+            # Estatísticas por Categoria
+            if 'Categoria' in df.columns:
+                categorias_unicas = df['Categoria'].unique()
+                categorias_com_dados = [cat for cat in categorias_unicas if cat != 'Sem categoria']
+                
+                if categorias_com_dados:
+                    st.markdown("---")
+                    st.write("### 📂 Estatísticas por Categoria")
+                    
+                    for categoria in categorias_com_dados:
+                        df_cat = df[df['Categoria'] == categoria]
+                        
+                        if len(df_cat) > 0:
+                            st.write(f"#### 🏷️ {categoria}")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                st.write("**Melhores:**")
+                                melhor_dia_cat = df_cat.loc[df_cat['Var. Dia (%)'].idxmax()] if not df_cat['Var. Dia (%)'].isna().all() else None
+                                if melhor_dia_cat is not None:
+                                    st.metric("Dia", melhor_dia_cat['Ação'], f"+{melhor_dia_cat['Var. Dia (%)']:.2f}%")
+                                
+                                melhor_semana_cat = df_cat.loc[df_cat['Var. 7 Dias (%)'].idxmax()] if not df_cat['Var. 7 Dias (%)'].isna().all() else None
+                                if melhor_semana_cat is not None:
+                                    st.metric("Semana", melhor_semana_cat['Ação'], f"+{melhor_semana_cat['Var. 7 Dias (%)']:.2f}%")
+                            
+                            with col2:
+                                st.write("**Médias:**")
+                                media_dia = df_cat['Var. Dia (%)'].mean()
+                                if not pd.isna(media_dia):
+                                    st.metric("Dia", "Média", f"{media_dia:.2f}%")
+                                
+                                media_semana = df_cat['Var. 7 Dias (%)'].mean()
+                                if not pd.isna(media_semana):
+                                    st.metric("Semana", "Média", f"{media_semana:.2f}%")
+                            
+                            with col3:
+                                st.write("**Piores:**")
+                                pior_dia_cat = df_cat.loc[df_cat['Var. Dia (%)'].idxmin()] if not df_cat['Var. Dia (%)'].isna().all() else None
+                                if pior_dia_cat is not None:
+                                    st.metric("Dia", pior_dia_cat['Ação'], f"{pior_dia_cat['Var. Dia (%)']:.2f}%")
+                                
+                                pior_semana_cat = df_cat.loc[df_cat['Var. 7 Dias (%)'].idxmin()] if not df_cat['Var. 7 Dias (%)'].isna().all() else None
+                                if pior_semana_cat is not None:
+                                    st.metric("Semana", pior_semana_cat['Ação'], f"{pior_semana_cat['Var. 7 Dias (%)']:.2f}%")
+                            
+                            st.markdown("---")
             
             # Download Excel
             from io import BytesIO
