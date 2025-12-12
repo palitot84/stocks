@@ -414,6 +414,28 @@ def calcular_variacao(ticker_symbol, dias):
     except Exception as e:
         return None, None
 
+def calcular_variacao_ytd(ticker_symbol):
+    """Calcula variação desde o início do ano corrente (YTD - Year To Date)"""
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        
+        # Buscar dados desde o início do ano
+        hist = ticker.history(period='ytd')
+        
+        if hist.empty or len(hist) < 2:
+            return None, None
+        
+        # Primeiro preço do ano
+        preco_inicial = hist['Close'].iloc[0]
+        # Último preço disponível
+        preco_final = hist['Close'].iloc[-1]
+        
+        variacao = ((preco_final - preco_inicial) / preco_inicial) * 100
+        return variacao, preco_final
+        
+    except Exception as e:
+        return None, None
+
 def gerar_relatorio_comparativo(lista_acoes, categories_dict):
     """Gera relatório comparativo de todas as ações"""
     relatorio = []
@@ -443,7 +465,7 @@ def gerar_relatorio_comparativo(lista_acoes, categories_dict):
         var_90d, _ = calcular_variacao(ticker_symbol, 90)
         var_180d, _ = calcular_variacao(ticker_symbol, 180)
         var_365d_full, _ = calcular_variacao(ticker_symbol, 365)
-        var_ano, _ = calcular_variacao(ticker_symbol, 252)  # ~252 dias úteis = 1 ano
+        var_ano, _ = calcular_variacao_ytd(ticker_symbol)  # Desde 01/01 do ano corrente
         
         linha['Var. Dia (%)'] = var_1d
         linha['Var. 7 Dias (%)'] = var_7d
