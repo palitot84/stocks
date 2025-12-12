@@ -351,40 +351,66 @@ with st.sidebar:
         st.info("Nenhum filtro cadastrado ainda.")
 
 def calcular_variacao(ticker_symbol, dias):
-    """Calcula variação percentual para um período específico"""
+    """Calcula variação percentual para um período específico usando dados do yfinance"""
     try:
         ticker = yf.Ticker(ticker_symbol)
-        end_date = datetime.now()
-        # Buscar mais dias para garantir que temos dados suficientes (considerando fins de semana e feriados)
-        start_date = end_date - timedelta(days=int(dias * 1.5))
         
-        hist = ticker.history(start=start_date, end=end_date)
+        # Usar fast_info para dados rápidos quando disponível
+        try:
+            fast_info = ticker.fast_info
+            current_price = fast_info.last_price
+        except:
+            # Fallback: buscar histórico recente
+            hist_recent = ticker.history(period='1d')
+            if hist_recent.empty:
+                return None, None
+            current_price = hist_recent['Close'].iloc[-1]
         
-        if len(hist) >= 2:
-            # Pegar o último preço (hoje)
+        # Mapear dias para períodos do yfinance
+        if dias == 1:
+            period = '5d'  # Pegar últimos 5 dias para garantir ter 2 pregões
+        elif dias <= 7:
+            period = '1mo'
+        elif dias <= 30:
+            period = '1mo'
+        elif dias <= 90:
+            period = '3mo'
+        elif dias <= 180:
+            period = '6mo'
+        else:
+            period = '1y'
+        
+        hist = ticker.history(period=period)
+        
+        if hist.empty or len(hist) < 2:
+            return None, None
+        
+        # Calcular quantos dias de negociação correspondem ao período
+        # Aproximadamente 252 dias úteis por ano
+        if dias == 1:
+            # Variação diária: último vs penúltimo pregão
+            if len(hist) >= 2:
+                preco_inicial = hist['Close'].iloc[-2]
+                preco_final = hist['Close'].iloc[-1]
+            else:
+                return None, None
+        else:
+            # Para outros períodos, calcular dias úteis aproximados
+            # Considerar ~21 dias úteis por mês (252/12)
+            dias_uteis = int(dias * (252 / 365))
+            
+            # Garantir que não pegamos mais dias do que temos
+            if dias_uteis >= len(hist):
+                preco_inicial = hist['Close'].iloc[0]
+            else:
+                # Pegar o preço N dias úteis atrás
+                preco_inicial = hist['Close'].iloc[-(dias_uteis + 1)]
+            
             preco_final = hist['Close'].iloc[-1]
-            
-            # Calcular a data alvo (N dias atrás a partir de hoje)
-            data_alvo = end_date - timedelta(days=dias)
-            
-            # Encontrar o preço mais próximo da data alvo
-            # Converter índice para datetime se necessário
-            if not isinstance(hist.index, pd.DatetimeIndex):
-                hist.index = pd.to_datetime(hist.index)
-            
-            # Encontrar o índice mais próximo da data alvo
-            idx = hist.index.searchsorted(data_alvo)
-            
-            # Ajustar se estiver fora dos limites
-            if idx >= len(hist):
-                idx = len(hist) - 1
-            elif idx > 0 and abs((hist.index[idx-1] - data_alvo).days) < abs((hist.index[idx] - data_alvo).days):
-                idx = idx - 1
-            
-            preco_inicial = hist['Close'].iloc[idx]
-            variacao = ((preco_final - preco_inicial) / preco_inicial) * 100
-            return variacao, preco_final
-        return None, None
+        
+        variacao = ((preco_final - preco_inicial) / preco_inicial) * 100
+        return variacao, preco_final
+        
     except Exception as e:
         return None, None
 
