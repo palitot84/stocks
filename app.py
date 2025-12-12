@@ -355,12 +355,20 @@ def calcular_variacao(ticker_symbol, dias):
     try:
         ticker = yf.Ticker(ticker_symbol)
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=dias + 5)  # Margem extra
+        start_date = end_date - timedelta(days=dias + 7)  # Margem para fins de semana
         
         hist = ticker.history(start=start_date, end=end_date)
         
         if len(hist) >= 2:
-            preco_inicial = hist['Close'].iloc[0]
+            # Garantir que pegamos exatamente o período desejado
+            # Pegar os últimos N dias úteis disponíveis
+            if len(hist) > dias:
+                # Se temos mais dias que o necessário, pegar apenas os últimos N
+                preco_inicial = hist['Close'].iloc[-(dias+1) if len(hist) > dias else 0]
+            else:
+                # Se temos menos, usar o primeiro disponível
+                preco_inicial = hist['Close'].iloc[0]
+            
             preco_final = hist['Close'].iloc[-1]
             variacao = ((preco_final - preco_inicial) / preco_inicial) * 100
             return variacao, preco_final
