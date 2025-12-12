@@ -436,8 +436,8 @@ def calcular_variacao_ytd(ticker_symbol):
     except Exception as e:
         return None, None
 
-def gerar_relatorio_comparativo(lista_acoes, categories_dict):
-    """Gera relatório comparativo de todas as ações"""
+def gerar_relatorio_comparativo(lista_acoes, categories_dict, period_value="1mo"):
+    """Gera relatório comparativo de todas as ações baseado no período selecionado"""
     relatorio = []
     
     progress_bar = st.progress(0)
@@ -458,22 +458,20 @@ def gerar_relatorio_comparativo(lista_acoes, categories_dict):
         else:
             linha['Preço Atual'] = None
         
-        # Calcular variações
-        var_1d, _ = calcular_variacao(ticker_symbol, 1)
-        var_7d, _ = calcular_variacao(ticker_symbol, 7)
-        var_30d, _ = calcular_variacao(ticker_symbol, 30)
-        var_90d, _ = calcular_variacao(ticker_symbol, 90)
-        var_180d, _ = calcular_variacao(ticker_symbol, 180)
-        var_365d_full, _ = calcular_variacao(ticker_symbol, 365)
-        var_ano, _ = calcular_variacao_ytd(ticker_symbol)  # Desde 01/01 do ano corrente
-        
-        linha['Var. Dia (%)'] = var_1d
-        linha['Var. 7 Dias (%)'] = var_7d
-        linha['Var. 30 Dias (%)'] = var_30d
-        linha['Var. Trimestre (%)'] = var_90d
-        linha['Var. Semestre (%)'] = var_180d
-        linha['Var. 365 Dias (%)'] = var_365d_full
-        linha['Var. Ano (%)'] = var_ano
+        # Calcular variação do período selecionado
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            df_periodo = ticker.history(period=period_value, auto_adjust=True)
+            
+            if not df_periodo.empty and len(df_periodo) > 1:
+                preco_inicial = df_periodo['Close'].iloc[0]
+                preco_final = df_periodo['Close'].iloc[-1]
+                variacao_periodo = ((preco_final - preco_inicial) / preco_inicial) * 100
+                linha['Variação (%)'] = variacao_periodo
+            else:
+                linha['Variação (%)'] = None
+        except:
+            linha['Variação (%)'] = None
         
         relatorio.append(linha)
         
@@ -514,9 +512,19 @@ else:
         with col2:
             st.write("")  # Espaçamento
         
+        # Seleção de período para o relatório
+        col_periodo, _ = st.columns([2, 2])
+        with col_periodo:
+            periodo_relatorio = st.selectbox(
+                "Período para análise:",
+                list(PERIOD_OPTIONS.keys()),
+                key="periodo_relatorio"
+            )
+        
         if st.button("🔄 Gerar Relatório", type="primary"):
             with st.spinner("Gerando relatório comparativo..."):
                 categories_dict = st.session_state.data.get("categories", {})
+                period_value = PERIOD_OPTIONS[periodo_relatorio]
                 
                 # Filtrar ações por categoria selecionada
                 if "Todas" in selected_categories or not categories_available:
@@ -528,21 +536,25 @@ else:
                     ]
                 
                 if acoes_filtradas:
-                    df_relatorio = gerar_relatorio_comparativo(acoes_filtradas, categories_dict)
+                    df_relatorio = gerar_relatorio_comparativo(acoes_filtradas, categories_dict, period_value)
                     st.session_state.relatorio = df_relatorio
+                    st.session_state.periodo_relatorio_usado = periodo_relatorio
                 else:
                     st.warning("⚠️ Nenhuma ação encontrada nas categorias selecionadas!")
         
         if 'relatorio' in st.session_state and not st.session_state.relatorio.empty:
             df = st.session_state.relatorio
             
+            # Mostrar período usado
+            periodo_usado = st.session_state.get('periodo_relatorio_usado', 'N/A')
+            st.info(f"📊 Relatório gerado para o período: **{periodo_usado}**")
+            
             # Opções de ordenação
             col1, col2 = st.columns([3, 1])
             with col1:
                 coluna_ordenacao = st.selectbox(
                     "Ordenar por:",
-                    ['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. 30 Dias (%)', 
-                     'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. 365 Dias (%)', 'Var. Ano (%)', 'Preço Atual'],
+                    ['Variação (%)', 'Preço Atual', 'Ação', 'Categoria'],
                     key="ordem_col"
                 )
             with col2:
@@ -583,92 +595,35 @@ else:
             # Aplicar formatação
             df_styled = df_display.style.applymap(
                 colorir_celulas, 
-                subset=['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. 30 Dias (%)', 
-                        'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. 365 Dias (%)', 'Var. Ano (%)']
+                subset=['Variação (%)']
             ).format({
-                'Var. Dia (%)': '{:.2f}%',
-                'Var. 7 Dias (%)': '{:.2f}%',
-                'Var. 30 Dias (%)': '{:.2f}%',
-                'Var. Trimestre (%)': '{:.2f}%',
-                'Var. Semestre (%)': '{:.2f}%',
-                'Var. 365 Dias (%)': '{:.2f}%',
-                'Var. Ano (%)': '{:.2f}%'
+                'Variação (%)': '{:.2f}%'
             }, na_rep='N/A')
             
             st.dataframe(df_styled, use_container_width=True, height=400)
             
             # Estatísticas resumidas
-            st.subheader("📊 Estatísticas do Relatório")
+            st.subheader("📊 Estatísticas do Período")
             
-            # Estatísticas Gerais
-            st.write("### 🏆 Melhores Performances (Geral)")
-            col1, col2, col3, col4, col5, col6 = st.columns(6)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
-                melhor_dia = df.loc[df['Var. Dia (%)'].idxmax()] if not df['Var. Dia (%)'].isna().all() else None
-                if melhor_dia is not None:
-                    st.metric("Dia", melhor_dia['Ação'], f"+{melhor_dia['Var. Dia (%)']:.2f}%")
+                st.write("### 🏆 Melhor Performance")
+                melhor = df.loc[df['Variação (%)'].idxmax()] if not df['Variação (%)'].isna().all() else None
+                if melhor is not None:
+                    st.metric(melhor['Ação'], f"+{melhor['Variação (%)']:.2f}%", delta=melhor.get('Categoria', 'N/A'))
             
             with col2:
-                melhor_semana = df.loc[df['Var. 7 Dias (%)'].idxmax()] if not df['Var. 7 Dias (%)'].isna().all() else None
-                if melhor_semana is not None:
-                    st.metric("Semana", melhor_semana['Ação'], f"+{melhor_semana['Var. 7 Dias (%)']:.2f}%")
+                st.write("### 📊 Média Geral")
+                media = df['Variação (%)'].mean()
+                if not pd.isna(media):
+                    st.metric("Variação Média", f"{media:.2f}%")
             
             with col3:
-                melhor_mes = df.loc[df['Var. Mês (%)'].idxmax()] if not df['Var. Mês (%)'].isna().all() else None
-                if melhor_mes is not None:
-                    st.metric("Mês", melhor_mes['Ação'], f"+{melhor_mes['Var. Mês (%)']:.2f}%")
-            
-            with col4:
-                melhor_trimestre = df.loc[df['Var. Trimestre (%)'].idxmax()] if not df['Var. Trimestre (%)'].isna().all() else None
-                if melhor_trimestre is not None:
-                    st.metric("Trimestre", melhor_trimestre['Ação'], f"+{melhor_trimestre['Var. Trimestre (%)']:.2f}%")
-            
-            with col5:
-                melhor_semestre = df.loc[df['Var. Semestre (%)'].idxmax()] if not df['Var. Semestre (%)'].isna().all() else None
-                if melhor_semestre is not None:
-                    st.metric("Semestre", melhor_semestre['Ação'], f"+{melhor_semestre['Var. Semestre (%)']:.2f}%")
-            
-            with col6:
-                melhor_ano = df.loc[df['Var. Ano (%)'].idxmax()] if not df['Var. Ano (%)'].isna().all() else None
-                if melhor_ano is not None:
-                    st.metric("Ano", melhor_ano['Ação'], f"+{melhor_ano['Var. Ano (%)']:.2f}%")
-            
-            st.markdown("---")
-            
-            # Piores Gerais
-            st.write("### 📉 Piores Performances (Geral)")
-            col1, col2, col3, col4, col5, col6 = st.columns(6)
-            
-            with col1:
-                pior_dia = df.loc[df['Var. Dia (%)'].idxmin()] if not df['Var. Dia (%)'].isna().all() else None
-                if pior_dia is not None:
-                    st.metric("Dia", pior_dia['Ação'], f"{pior_dia['Var. Dia (%)']:.2f}%")
-            
-            with col2:
-                pior_semana = df.loc[df['Var. 7 Dias (%)'].idxmin()] if not df['Var. 7 Dias (%)'].isna().all() else None
-                if pior_semana is not None:
-                    st.metric("Semana", pior_semana['Ação'], f"{pior_semana['Var. 7 Dias (%)']:.2f}%")
-            
-            with col3:
-                pior_mes = df.loc[df['Var. Mês (%)'].idxmin()] if not df['Var. Mês (%)'].isna().all() else None
-                if pior_mes is not None:
-                    st.metric("Mês", pior_mes['Ação'], f"{pior_mes['Var. Mês (%)']:.2f}%")
-            
-            with col4:
-                pior_trimestre = df.loc[df['Var. Trimestre (%)'].idxmin()] if not df['Var. Trimestre (%)'].isna().all() else None
-                if pior_trimestre is not None:
-                    st.metric("Trimestre", pior_trimestre['Ação'], f"{pior_trimestre['Var. Trimestre (%)']:.2f}%")
-            
-            with col5:
-                pior_semestre = df.loc[df['Var. Semestre (%)'].idxmin()] if not df['Var. Semestre (%)'].isna().all() else None
-                if pior_semestre is not None:
-                    st.metric("Semestre", pior_semestre['Ação'], f"{pior_semestre['Var. Semestre (%)']:.2f}%")
-            
-            with col6:
-                pior_ano = df.loc[df['Var. Ano (%)'].idxmin()] if not df['Var. Ano (%)'].isna().all() else None
-                if pior_ano is not None:
-                    st.metric("Ano", pior_ano['Ação'], f"{pior_ano['Var. Ano (%)']:.2f}%")
+                st.write("### 📉 Pior Performance")
+                pior = df.loc[df['Variação (%)'].idxmin()] if not df['Variação (%)'].isna().all() else None
+                if pior is not None:
+                    st.metric(pior['Ação'], f"{pior['Variação (%)']:.2f}%", delta=pior.get('Categoria', 'N/A'))
             
             # Estatísticas por Categoria
             if 'Categoria' in df.columns:
@@ -688,34 +643,22 @@ else:
                             col1, col2, col3 = st.columns(3)
                             
                             with col1:
-                                st.write("**Melhores:**")
-                                melhor_dia_cat = df_cat.loc[df_cat['Var. Dia (%)'].idxmax()] if not df_cat['Var. Dia (%)'].isna().all() else None
-                                if melhor_dia_cat is not None:
-                                    st.metric("Dia", melhor_dia_cat['Ação'], f"+{melhor_dia_cat['Var. Dia (%)']:.2f}%")
-                                
-                                melhor_semana_cat = df_cat.loc[df_cat['Var. 7 Dias (%)'].idxmax()] if not df_cat['Var. 7 Dias (%)'].isna().all() else None
-                                if melhor_semana_cat is not None:
-                                    st.metric("Semana", melhor_semana_cat['Ação'], f"+{melhor_semana_cat['Var. 7 Dias (%)']:.2f}%")
+                                st.write("**Melhor:**")
+                                melhor_cat = df_cat.loc[df_cat['Variação (%)'].idxmax()] if not df_cat['Variação (%)'].isna().all() else None
+                                if melhor_cat is not None:
+                                    st.metric(melhor_cat['Ação'], f"+{melhor_cat['Variação (%)']:.2f}%")
                             
                             with col2:
-                                st.write("**Médias:**")
-                                media_dia = df_cat['Var. Dia (%)'].mean()
-                                if not pd.isna(media_dia):
-                                    st.metric("Dia", "Média", f"{media_dia:.2f}%")
-                                
-                                media_semana = df_cat['Var. 7 Dias (%)'].mean()
-                                if not pd.isna(media_semana):
-                                    st.metric("Semana", "Média", f"{media_semana:.2f}%")
+                                st.write("**Média:**")
+                                media_cat = df_cat['Variação (%)'].mean()
+                                if not pd.isna(media_cat):
+                                    st.metric("Variação Média", f"{media_cat:.2f}%")
                             
                             with col3:
-                                st.write("**Piores:**")
-                                pior_dia_cat = df_cat.loc[df_cat['Var. Dia (%)'].idxmin()] if not df_cat['Var. Dia (%)'].isna().all() else None
-                                if pior_dia_cat is not None:
-                                    st.metric("Dia", pior_dia_cat['Ação'], f"{pior_dia_cat['Var. Dia (%)']:.2f}%")
-                                
-                                pior_semana_cat = df_cat.loc[df_cat['Var. 7 Dias (%)'].idxmin()] if not df_cat['Var. 7 Dias (%)'].isna().all() else None
-                                if pior_semana_cat is not None:
-                                    st.metric("Semana", pior_semana_cat['Ação'], f"{pior_semana_cat['Var. 7 Dias (%)']:.2f}%")
+                                st.write("**Pior:**")
+                                pior_cat = df_cat.loc[df_cat['Variação (%)'].idxmin()] if not df_cat['Variação (%)'].isna().all() else None
+                                if pior_cat is not None:
+                                    st.metric(pior_cat['Ação'], f"{pior_cat['Variação (%)']:.2f}%")
                             
                             st.markdown("---")
             
@@ -796,6 +739,61 @@ else:
                 st.caption(f"⏰ Dados com delay de ~10 minutos | Atualizado: {current_price_data['timestamp'].strftime('%H:%M:%S')}")
             else:
                 st.warning("⚠️ Não foi possível obter preço atual")
+            
+            # Variações padronizadas (mesmas do relatório comparativo)
+            st.subheader("📊 Variações de Preço")
+            with st.spinner("Calculando variações..."):
+                var_1d, _ = calcular_variacao(selected_stock, 1)
+                var_7d, _ = calcular_variacao(selected_stock, 7)
+                var_30d, _ = calcular_variacao(selected_stock, 30)
+                var_90d, _ = calcular_variacao(selected_stock, 90)
+                var_180d, _ = calcular_variacao(selected_stock, 180)
+                var_365d, _ = calcular_variacao(selected_stock, 365)
+                var_ano, _ = calcular_variacao_ytd(selected_stock)
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    if var_1d is not None:
+                        st.metric("Var. Dia", f"{var_1d:+.2f}%")
+                    else:
+                        st.metric("Var. Dia", "N/A")
+                    
+                    if var_90d is not None:
+                        st.metric("Var. Trimestre", f"{var_90d:+.2f}%")
+                    else:
+                        st.metric("Var. Trimestre", "N/A")
+                
+                with col2:
+                    if var_7d is not None:
+                        st.metric("Var. 7 Dias", f"{var_7d:+.2f}%")
+                    else:
+                        st.metric("Var. 7 Dias", "N/A")
+                    
+                    if var_180d is not None:
+                        st.metric("Var. Semestre", f"{var_180d:+.2f}%")
+                    else:
+                        st.metric("Var. Semestre", "N/A")
+                
+                with col3:
+                    if var_30d is not None:
+                        st.metric("Var. 30 Dias", f"{var_30d:+.2f}%")
+                    else:
+                        st.metric("Var. 30 Dias", "N/A")
+                    
+                    if var_365d is not None:
+                        st.metric("Var. 365 Dias", f"{var_365d:+.2f}%")
+                    else:
+                        st.metric("Var. 365 Dias", "N/A")
+                
+                with col4:
+                    st.write("")  # Espaçamento
+                    if var_ano is not None:
+                        st.metric("Var. Ano (YTD)", f"{var_ano:+.2f}%")
+                    else:
+                        st.metric("Var. Ano (YTD)", "N/A")
+            
+            st.caption("💡 Variações calculadas usando os mesmos critérios do Relatório Comparativo")
             
             st.markdown("---")
             
