@@ -355,25 +355,37 @@ def calcular_variacao(ticker_symbol, dias):
     try:
         ticker = yf.Ticker(ticker_symbol)
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=dias + 7)  # Margem para fins de semana
+        # Buscar mais dias para garantir que temos dados suficientes (considerando fins de semana e feriados)
+        start_date = end_date - timedelta(days=int(dias * 1.5))
         
         hist = ticker.history(start=start_date, end=end_date)
         
         if len(hist) >= 2:
-            # Garantir que pegamos exatamente o período desejado
-            # Pegar os últimos N dias úteis disponíveis
-            if len(hist) > dias:
-                # Se temos mais dias que o necessário, pegar apenas os últimos N
-                preco_inicial = hist['Close'].iloc[-(dias+1) if len(hist) > dias else 0]
-            else:
-                # Se temos menos, usar o primeiro disponível
-                preco_inicial = hist['Close'].iloc[0]
-            
+            # Pegar o último preço (hoje)
             preco_final = hist['Close'].iloc[-1]
+            
+            # Calcular a data alvo (N dias atrás a partir de hoje)
+            data_alvo = end_date - timedelta(days=dias)
+            
+            # Encontrar o preço mais próximo da data alvo
+            # Converter índice para datetime se necessário
+            if not isinstance(hist.index, pd.DatetimeIndex):
+                hist.index = pd.to_datetime(hist.index)
+            
+            # Encontrar o índice mais próximo da data alvo
+            idx = hist.index.searchsorted(data_alvo)
+            
+            # Ajustar se estiver fora dos limites
+            if idx >= len(hist):
+                idx = len(hist) - 1
+            elif idx > 0 and abs((hist.index[idx-1] - data_alvo).days) < abs((hist.index[idx] - data_alvo).days):
+                idx = idx - 1
+            
+            preco_inicial = hist['Close'].iloc[idx]
             variacao = ((preco_final - preco_inicial) / preco_inicial) * 100
             return variacao, preco_final
         return None, None
-    except:
+    except Exception as e:
         return None, None
 
 def gerar_relatorio_comparativo(lista_acoes, categories_dict):
