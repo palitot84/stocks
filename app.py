@@ -442,15 +442,16 @@ def gerar_relatorio_comparativo(lista_acoes, categories_dict):
         var_30d, _ = calcular_variacao(ticker_symbol, 30)
         var_90d, _ = calcular_variacao(ticker_symbol, 90)
         var_180d, _ = calcular_variacao(ticker_symbol, 180)
-        var_365d, _ = calcular_variacao(ticker_symbol, 365)
+        var_365d_full, _ = calcular_variacao(ticker_symbol, 365)
+        var_ano, _ = calcular_variacao(ticker_symbol, 252)  # ~252 dias úteis = 1 ano
         
         linha['Var. Dia (%)'] = var_1d
         linha['Var. 7 Dias (%)'] = var_7d
-        linha['Var. Mês (%)'] = var_30d
         linha['Var. 30 Dias (%)'] = var_30d
         linha['Var. Trimestre (%)'] = var_90d
         linha['Var. Semestre (%)'] = var_180d
-        linha['Var. Ano (%)'] = var_365d
+        linha['Var. 365 Dias (%)'] = var_365d_full
+        linha['Var. Ano (%)'] = var_ano
         
         relatorio.append(linha)
         
@@ -518,8 +519,8 @@ else:
             with col1:
                 coluna_ordenacao = st.selectbox(
                     "Ordenar por:",
-                    ['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. Mês (%)', 'Var. 30 Dias (%)', 
-                     'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. Ano (%)', 'Preço Atual'],
+                    ['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. 30 Dias (%)', 
+                     'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. 365 Dias (%)', 'Var. Ano (%)', 'Preço Atual'],
                     key="ordem_col"
                 )
             with col2:
@@ -560,15 +561,15 @@ else:
             # Aplicar formatação
             df_styled = df_display.style.applymap(
                 colorir_celulas, 
-                subset=['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. Mês (%)', 'Var. 30 Dias (%)', 
-                        'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. Ano (%)']
+                subset=['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. 30 Dias (%)', 
+                        'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. 365 Dias (%)', 'Var. Ano (%)']
             ).format({
                 'Var. Dia (%)': '{:.2f}%',
                 'Var. 7 Dias (%)': '{:.2f}%',
-                'Var. Mês (%)': '{:.2f}%',
                 'Var. 30 Dias (%)': '{:.2f}%',
                 'Var. Trimestre (%)': '{:.2f}%',
                 'Var. Semestre (%)': '{:.2f}%',
+                'Var. 365 Dias (%)': '{:.2f}%',
                 'Var. Ano (%)': '{:.2f}%'
             }, na_rep='N/A')
             
