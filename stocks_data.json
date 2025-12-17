@@ -49,7 +49,7 @@
     "TLT",
     "VOO",
     "NVDA",
-    "TSMC"
+    "TSM"
   ],
   "categories": {
     "BBAS3.SA": "Brasileiras - Melhores",
@@ -101,7 +101,7 @@
     "TLT": "Stocks",
     "VOO": "Stocks",
     "NVDA": "Stocks",
-    "TSMC": "Stocks"
+    "TSM": "Stocks"
   },
   "category_list": [
     "Brasileiras - Melhores",
@@ -122,5 +122,6 @@
     "Stock Splits"
   ]
 }
+
 
 
