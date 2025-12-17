@@ -44,10 +44,12 @@
     "MSFT",
     "GOOGL",
     "JNJ",
-    "BRK.B",
+    "BRK-B",
     "IJS",
     "TLT",
-    "VOO"
+    "VOO",
+    "NVDA",
+    "TSMC"
   ],
   "categories": {
     "BBAS3.SA": "Brasileiras - Melhores",
@@ -94,10 +96,12 @@
     "MSFT": "Stocks",
     "GOOGL": "Stocks",
     "JNJ": "Stocks",
-    "BRK.B": "Stocks",
+    "BRK-B": "Stocks",
     "IJS": "Stocks",
     "TLT": "Stocks",
-    "VOO": "Stocks"
+    "VOO": "Stocks",
+    "NVDA": "Stocks"
+    "TSMC": "Stocks"
   },
   "category_list": [
     "Brasileiras - Melhores",
@@ -118,3 +122,4 @@
     "Stock Splits"
   ]
 }
+
