@@ -100,7 +100,7 @@
     "IJS": "Stocks",
     "TLT": "Stocks",
     "VOO": "Stocks",
-    "NVDA": "Stocks"
+    "NVDA": "Stocks",
     "TSMC": "Stocks"
   },
   "category_list": [
@@ -122,4 +122,5 @@
     "Stock Splits"
   ]
 }
+
 
