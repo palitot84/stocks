@@ -39,6 +39,8 @@
     "XPML11.SA",
     "VILG11.SA",
     "HGRU11.SA",
+    "TTEN3.SA",
+    "FIQE3.SA",
     "ASML",
     "AAPL",
     "MSFT",
@@ -61,6 +63,8 @@
     "RADL3.SA": "Brasileiras - Melhores",
     "EQTL3.SA": "Brasileiras - Melhores",
     "MULT3.SA": "Brasileiras - Melhores",
+    "TTEN3.SA": "Brasileiras - Melhores",
+    "FIQE3.SA": "Brasileiras - Melhores",
     "EGIE3.SA": "Brasileiras - Comprar",
     "FLRY3.SA": "Brasileiras - Comprar",
     "LEVE3.SA": "Brasileiras - Comprar",
@@ -122,6 +126,7 @@
     "Stock Splits"
   ]
 }
+
 
 
 
