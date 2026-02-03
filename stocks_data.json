@@ -50,7 +50,8 @@
     "VOO",
     "NVDA",
     "TSM",
-    "TTEN3.SA"
+    "TTEN3.SA",
+    "FIQE3.SA"
   ],
   "categories": {
     "BBAS3.SA": "Brasileiras - Melhores",
@@ -103,7 +104,8 @@
     "VOO": "Stocks",
     "NVDA": "Stocks",
     "TSM": "Stocks",
-    "TTEN3.SA": "Brasileiras - De olho"
+    "TTEN3.SA": "Brasileiras - De olho",
+    "FIQE3.SA": "Brasileiras - De olho"
   },
   "category_list": [
     "Brasileiras - Melhores",
@@ -124,6 +126,7 @@
     "Stock Splits"
   ]
 }
+
 
 
 
