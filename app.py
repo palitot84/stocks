@@ -581,7 +581,7 @@ else:
             df_display = df_display.rename(columns={'Preço Formatado': 'Preço Atual'})
             
             # Aplicar formatação
-            df_styled = df_display.style.applymap(
+            df_styled = df_display.style.map(
                 colorir_celulas, 
                 subset=['Var. Dia (%)', 'Var. 7 Dias (%)', 'Var. 30 Dias (%)', 
                         'Var. Trimestre (%)', 'Var. Semestre (%)', 'Var. 365 Dias (%)', 'Var. Ano (%)']
