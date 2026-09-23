@@ -20,11 +20,6 @@ REQUEST_DELAY = 2  # Delay between requests in seconds
 
 DB_URL = os.getenv("DB_URL") or st.secrets.get("DB_URL")
 
-##DB_URL = os.getenv(
-#    "DB_URL",
-#    "postgresql://neondb_owner:npg_RsPJfa6NwK5n@ep-polished-sky-acbm865c.sa-east-1.aws.neon.tech/neondb?sslmode=require"
-#)
-
 DEFAULT_COLUMNS = [
     "Open", "High", "Low", "Close", "Volume",
     "Dividends", "Stock Splits"
