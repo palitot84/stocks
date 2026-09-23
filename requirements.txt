@@ -1,0 +1,10 @@
+streamlit
+yfinance
+pandas
+plotly
+psycopg2-binary
+requests
+beautifulsoup4
+html5lib
+lxml
+openpyxl
